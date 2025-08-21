@@ -47,3 +47,4 @@
 /Users/varoonsahgal/weatheraug21/weather-console-app/src/obj/Debug/net8.0/WeatherConsole.pdb
 /Users/varoonsahgal/weatheraug21/weather-console-app/src/obj/Debug/net8.0/WeatherConsole.genruntimeconfig.cache
 /Users/varoonsahgal/weatheraug21/weather-console-app/src/obj/Debug/net8.0/ref/WeatherConsole.dll
+/Users/varoonsahgal/weatheraug21/weather-console-app/src/obj/Debug/net8.0/WeatherConsole.sourcelink.json

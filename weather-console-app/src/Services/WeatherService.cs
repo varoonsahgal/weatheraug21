@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using WeatherConsole.Configuration;
@@ -12,59 +12,97 @@ namespace WeatherConsole.Services
 {
     public class WeatherService : IWeatherService
     {
-        private readonly HttpClient _httpClient;
-        private readonly ApiSettings _apiSettings;
+        private readonly HttpClient _http;
+        private readonly ApiSettings _settings;
 
-        public WeatherService(HttpClient httpClient, IOptions<ApiSettings> apiOptions)
+        public WeatherService(HttpClient http, IOptions<ApiSettings> settings)
         {
-            _httpClient = httpClient;
-            _apiSettings = apiOptions.Value;
+            _http = http;
+            _settings = settings.Value;
         }
 
-        public async Task<WeatherResponse?> GetWeatherAsync(string cityName)
+        public async Task<WeatherResponse?> GetWeatherAsync(string city)
         {
-            if (string.IsNullOrWhiteSpace(cityName)) return null;
-            if (string.IsNullOrWhiteSpace(_apiSettings.ApiKey))
-                throw new InvalidOperationException("API key is missing. Set ApiSettings:ApiKey in configuration.");
-
-            // Build query for OpenWeatherMap (metric units & simple fields)
-            var url = $"{_apiSettings.BaseUrl}?q={Uri.EscapeDataString(cityName)}&appid={_apiSettings.ApiKey}&units=metric";
-
-            try
+            var geo = await GeocodeAsync(city);
+            if (geo == null)
             {
-                var dto = await _httpClient.GetFromJsonAsync<OpenWeatherDto>(url);
-                if (dto == null || dto.Main == null || dto.Weather == null || dto.Weather.Length == 0) return null;
-
-                return new WeatherResponse
-                {
-                    City = dto.Name ?? cityName,
-                    Temperature = dto.Main.Temp,
-                    Condition = dto.Weather[0].Description ?? dto.Weather[0].Main ?? "Unknown"
-                };
+                return null;
             }
-            catch (HttpRequestException)
+
+            var forecast = await GetCurrentForecastAsync(geo.Value.lat, geo.Value.lon);
+            if (forecast == null)
             {
-                return null; // Network or 404
+                return null;
             }
+
+            return new WeatherResponse
+            {
+                City = geo.Value.name,
+                Temperature = forecast.Value.temperature,
+                Condition = MapWeatherCode(forecast.Value.code)
+            };
         }
 
-        // Internal DTOs for minimal OpenWeatherMap mapping
-        private sealed class OpenWeatherDto
+        private async Task<(string name, double lat, double lon)?> GeocodeAsync(string city)
         {
-            [JsonPropertyName("name")] public string? Name { get; set; }
-            [JsonPropertyName("weather")] public WeatherPart[]? Weather { get; set; }
-            [JsonPropertyName("main")] public MainPart? Main { get; set; }
+            var url = $"{_settings.GeocodingBaseUrl}search?name={Uri.EscapeDataString(city)}&count=1";
+            using var resp = await _http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
+                return null;
+
+            var first = results[0];
+            var name = first.GetProperty("name").GetString() ?? city;
+            var lat = first.GetProperty("latitude").GetDouble();
+            var lon = first.GetProperty("longitude").GetDouble();
+            return (name, lat, lon);
         }
 
-        private sealed class WeatherPart
+        private async Task<(double temperature, int code)?> GetCurrentForecastAsync(double lat, double lon)
         {
-            [JsonPropertyName("main")] public string? Main { get; set; }
-            [JsonPropertyName("description")] public string? Description { get; set; }
+            var url = $"{_settings.ForecastBaseUrl}forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code";
+            using var resp = await _http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("current", out var current))
+                return null;
+
+            if (!current.TryGetProperty("temperature_2m", out var tempProp) ||
+                !current.TryGetProperty("weather_code", out var codeProp))
+                return null;
+
+            var temp = tempProp.GetDouble();
+            var code = codeProp.GetInt32();
+            return (temp, code);
         }
 
-        private sealed class MainPart
+        private static string MapWeatherCode(int code)
         {
-            [JsonPropertyName("temp")] public double Temp { get; set; }
+            // Mapping per Open-Meteo weather codes
+            return code switch
+            {
+                0 => "Clear sky",
+                1 => "Mainly clear",
+                2 => "Partly cloudy",
+                3 => "Overcast",
+                45 or 48 => "Fog",
+                51 or 53 or 55 => "Drizzle",
+                56 or 57 => "Freezing drizzle",
+                61 or 63 or 65 => "Rain",
+                66 or 67 => "Freezing rain",
+                71 or 73 or 75 => "Snowfall",
+                77 => "Snow grains",
+                80 or 81 or 82 => "Rain showers",
+                85 or 86 => "Snow showers",
+                95 => "Thunderstorm",
+                96 or 99 => "Thunderstorm with hail",
+                _ => $"Unknown (code {code})"
+            };
         }
     }
 }

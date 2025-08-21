@@ -1,10 +1,10 @@
-using System.Threading.Tasks;
-using WeatherConsole.Models;
-
 namespace WeatherConsole.Interfaces
 {
+    using System.Threading.Tasks;
+    using WeatherConsole.Models;
+
     public interface IWeatherService
     {
-        Task<WeatherResponse?> GetWeatherAsync(string cityName);
+        Task<WeatherResponse?> GetWeatherAsync(string city);
     }
 }

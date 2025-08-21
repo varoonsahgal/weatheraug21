@@ -27,7 +27,7 @@ weather-console-app
 ### Prerequisites
 
 - .NET SDK (version 5.0 or later)
-- An API key for the weather service (to be configured in `appsettings.json`)
+- (No API key required; uses Open-Meteo public APIs)
 
 ### Installation
 
@@ -46,7 +46,7 @@ weather-console-app
 
 ### Configuration
 
-Before running the application, you need to set up your API key and base URL in the `appsettings.json` file located in the `src` directory.
+Optional: You can adjust base URLs in `appsettings.json` (Open-Meteo Geocoding & Forecast). No API key needed.
 
 ### Running the Application
 

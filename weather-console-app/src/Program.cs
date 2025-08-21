@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using WeatherConsole.Interfaces;
 using WeatherConsole.Services;
 using WeatherConsole.Configuration;
+using WeatherConsole.Rendering;
 
 namespace WeatherConsole
 {
@@ -42,6 +43,8 @@ namespace WeatherConsole
                     Console.WriteLine($"Weather in {weatherResponse.City}:");
                     Console.WriteLine($"Temperature: {weatherResponse.Temperature:F1}°C");
                     Console.WriteLine($"Condition: {weatherResponse.Condition}");
+                    Console.WriteLine();
+                    Console.WriteLine(AsciiWeatherArt.Get(weatherResponse.Condition));
                 }
                 return 0;
             }
